@@ -43,40 +43,74 @@ built for migrations.
 ## What works today
 
 The core diff engine: compare two JSON bodies and get every difference with its exact location
-(a [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901)). There is no CLI yet.
+(a [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901)), after applying the tolerance rules
+you expect. There is no CLI yet.
 
 ```python
 import json
 from decimal import Decimal
 
 from migrate_guard.domain.services.response_diff import diff_responses
-from migrate_guard.domain.value_objects.rules import IgnoreRule
+from migrate_guard.domain.value_objects.rules import (
+    DatetimeRule,
+    IgnoreRule,
+    NumericRule,
+    UnorderedRule,
+)
 
 # Parse numbers as Decimal: the comparison must not add its own rounding errors.
 baseline = json.loads(
-    '{"request_id": "a1", "total": 14.93, "promo": {"ends_at": null}}', parse_float=Decimal
+    """{"request_id": "a1",
+        "items": [{"sku": "A1", "price": 2.675}, {"sku": "B2", "price": 10.005}],
+        "promo": {"ends_at": "2026-11-30T23:59:00-03:00"}}""",
+    parse_float=Decimal,
 )
-candidate = json.loads('{"request_id": "b2", "total": 14.92, "promo": {}}', parse_float=Decimal)
+candidate = json.loads(
+    """{"request_id": "b2",
+        "items": [{"sku": "B2", "price": 10.01}, {"sku": "A1", "price": 2.67}],
+        "promo": {"ends_at": "2026-12-01T02:59:00"}}""",
+    parse_float=Decimal,
+)
 
-result = diff_responses(baseline, candidate, (IgnoreRule(path="/request_id"),))
-for d in result.differences:
-    print(f"{d.kind:<22} {d.location}  {d.baseline!r} -> {d.candidate!r}")
+rules = (
+    IgnoreRule(path="/request_id"),
+    UnorderedRule(path="/items", key="sku"),
+    NumericRule(path="/items/*/price", decimals=2),
+    DatetimeRule(path="/promo/ends_at"),
+)
+for d in diff_responses(baseline, candidate, rules).differences:
+    print(f"{d.kind:<20} {d.location}  {d.detail}")
 ```
 
 ```text
-value_changed          /total  Decimal('14.93') -> Decimal('14.92')
-missing_in_candidate   /promo/ends_at  None -> MISSING
+value_changed        /items/0/price  rounded to 2 decimals (half_up): 2.68 vs 2.67
+rule_not_applicable  /promo/ends_at  candidate datetime has no timezone: '2026-12-01T02:59:00'
 ```
 
+The different `request_id`, the reordered items and `10.005` vs `10.01` are all tolerated. Two
+things are not: `2.675` rounded the wrong way, and a timestamp that lost its time zone.
+
+The rules:
+
+- `ignore`: skip a path (and everything under it).
+- `numeric`: round both sides to N decimals (`half_up`, `half_even` or `down`) before comparing.
+- `unordered`: compare an array ignoring order, pairing items by a key. A duplicated or missing
+  key is reported, never matched silently.
+- `datetime`: compare ISO 8601 strings as instants, so the same moment in another offset matches.
+  A datetime without a time zone is reported, never assumed to be UTC.
+
+Paths accept `*` (`/items/*/price`). A rule that never matches anything is returned as unused, so
+stale rules are visible.
+
 A field that is `null` and a field that doesn't exist are different things, so they are reported
-differently. The four kinds of difference are `value_changed`, `type_changed`,
-`missing_in_candidate` and `added_in_candidate`.
+differently. The kinds of difference are `value_changed`, `type_changed`, `missing_in_candidate`,
+`added_in_candidate`, `duplicate_key` and `rule_not_applicable`.
 
 ## Roadmap
 
 - [x] **M0:** project skeleton, response diff with `ignore` rules.
-- [ ] **M1:** numeric, unordered and datetime rules; HTTP target; `migrate-guard run` CLI; the
-      retail-pricing demo.
+- [ ] **M1:** ~~numeric, unordered and datetime rules~~ (done); HTTP target; `migrate-guard run`
+      CLI; the retail-pricing demo.
 - [ ] **M2:** database state diff (SQLAlchemy: Postgres, SQL Server, SQLite), seeding and isolation.
 - [ ] **M3:** pytest plugin, JSON and JUnit reports, first PyPI release.
 - [ ] **M4:** opt-in AI triage of differences (expected vs likely bug).
