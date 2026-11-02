@@ -27,6 +27,10 @@ class DiffKind(StrEnum):
     TYPE_CHANGED = "type_changed"  # "10" vs 10, null vs 0
     MISSING_IN_CANDIDATE = "missing_in_candidate"  # the rewrite dropped a field
     ADDED_IN_CANDIDATE = "added_in_candidate"  # the rewrite added a field
+    DUPLICATE_KEY = "duplicate_key"  # an `unordered` array has two items with the same key
+    # A rule matched but can't read the value (bad datetime, no timezone, missing key...).
+    # Never a silent match: the rule's assumption is broken, so a human has to look.
+    RULE_NOT_APPLICABLE = "rule_not_applicable"
 
 
 @dataclass(frozen=True)
@@ -35,3 +39,4 @@ class Difference:
     location: JsonPointer
     baseline: Side
     candidate: Side
+    detail: str = ""  # why, in words, when the kind alone doesn't say it

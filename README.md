@@ -53,10 +53,10 @@ from migrate_guard.domain.services.response_diff import diff_responses
 from migrate_guard.domain.value_objects.rules import IgnoreRule
 
 # Parse numbers as Decimal: the comparison must not add its own rounding errors.
-baseline = json.loads('{"request_id": "a1", "total": 14.93, "promo": {"ends_at": null}}',
-                      parse_float=Decimal)
-candidate = json.loads('{"request_id": "b2", "total": 14.92, "promo": {}}',
-                       parse_float=Decimal)
+baseline = json.loads(
+    '{"request_id": "a1", "total": 14.93, "promo": {"ends_at": null}}', parse_float=Decimal
+)
+candidate = json.loads('{"request_id": "b2", "total": 14.92, "promo": {}}', parse_float=Decimal)
 
 result = diff_responses(baseline, candidate, (IgnoreRule(path="/request_id"),))
 for d in result.differences:
