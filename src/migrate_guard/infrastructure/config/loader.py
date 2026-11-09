@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import decimal
+import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -20,6 +22,13 @@ from migrate_guard.domain.value_objects.rules import (
     NumericRule,
     Rule,
     UnorderedRule,
+)
+from migrate_guard.infrastructure.config.state_config import (
+    SeedConfig,
+    StateConfigError,
+    StateSettings,
+    StateSideConfig,
+    resolve_state,
 )
 
 
@@ -77,10 +86,12 @@ class TargetConfig(_Strict):
     url: str
     timeout_seconds: float = Field(default=10.0, gt=0, le=300)
     health_path: str = "/"
+    state: StateSideConfig | None = None
 
 
 class _RulesConfig(_Strict):
     response: list[dict[str, Any]] = []
+    state: list[dict[str, Any]] = []
 
 
 class _RedactConfig(_Strict):
@@ -94,6 +105,7 @@ class _ConfigFile(_Strict):
     corpus: str
     rules: _RulesConfig = _RulesConfig()
     redact: _RedactConfig = _RedactConfig()
+    seed: SeedConfig | None = None
     allow_mutating: bool = False
 
 
@@ -121,11 +133,6 @@ class _CaseFile(_Strict):
 
 # --- loading --------------------------------------------------------------------------
 
-_NOT_YET = {
-    "state": "database state comparison is not implemented yet (planned for v0.2)",
-    "seed": "seeding is not implemented yet (planned for v0.2)",
-}
-
 
 @dataclass(frozen=True)
 class LoadedConfig:
@@ -135,19 +142,30 @@ class LoadedConfig:
     redaction: RedactionPolicy
     allow_mutating: bool
     cases: tuple[Case, ...]
+    state: StateSettings | None = None  # None: responses only
 
 
-def load_config(path: Path) -> LoadedConfig:
+def load_config(path: Path, env: Mapping[str, str] | None = None) -> LoadedConfig:
     raw = _read_yaml(path)
     if not isinstance(raw, dict):
         raise ConfigError(f"{path} must be a YAML mapping")
-    _reject_unsupported(raw)
     try:
         config = _ConfigFile.model_validate(raw)
     except ValidationError as e:
         raise ConfigError(_explain(path, e)) from e
 
     corpus_dir = (path.parent / config.corpus).resolve()
+    try:
+        state = resolve_state(
+            config.baseline.state,
+            config.candidate.state,
+            config.seed,
+            config.rules.state,
+            path.parent,
+            os.environ if env is None else env,
+        )
+    except StateConfigError as e:
+        raise ConfigError(str(e)) from e
     return LoadedConfig(
         baseline=config.baseline,
         candidate=config.candidate,
@@ -155,6 +173,7 @@ def load_config(path: Path) -> LoadedConfig:
         redaction=RedactionPolicy((*DEFAULT_FIELD_PATTERNS, *config.redact.fields)),
         allow_mutating=config.allow_mutating,
         cases=load_corpus(corpus_dir),
+        state=state,
     )
 
 
@@ -176,13 +195,6 @@ def load_corpus(directory: Path) -> tuple[Case, ...]:
         seen[parsed.name] = file
         cases.append(_to_case(parsed, file))
     return tuple(cases)
-
-
-def _reject_unsupported(raw: dict[str, Any]) -> None:
-    sides = (raw.get("baseline"), raw.get("candidate"))
-    for key, reason in _NOT_YET.items():
-        if key in raw or any(isinstance(s, dict) and key in s for s in sides):
-            raise ConfigError(f"`{key}`: {reason}")
 
 
 def _parse_rule(item: dict[str, Any], index: int) -> Rule:

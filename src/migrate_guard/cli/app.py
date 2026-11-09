@@ -17,6 +17,7 @@ from migrate_guard.infrastructure.adapters.targets.http_target import (
     UnsafeTargetError,
 )
 from migrate_guard.infrastructure.config.loader import ConfigError, TargetConfig, load_config
+from migrate_guard.infrastructure.config.state_config import StateConfigError
 
 app = typer.Typer(
     help="Catch behavior changes when you rewrite a legacy service.",
@@ -42,7 +43,7 @@ def run(
         bool, typer.Option("--allow-remote", help="Allow targets that are not loopback.")
     ] = False,
 ) -> None:
-    """Replay the corpus against the baseline and the candidate, and compare the responses.
+    """Replay the corpus against the baseline and the candidate, and compare responses and state.
 
     Exit codes: 0 all match, 1 differences or case errors, 2 refused (config, target, safety).
     """
@@ -57,16 +58,16 @@ def run(
             if unknown:
                 raise ConfigError(f"unknown case: {', '.join(unknown)}")
             cases = tuple(c for c in cases if c.name in case)
+        state = loaded.state.build() if loaded.state else None
         baseline = _target(loaded.baseline, allow_remote)
         candidate = _target(loaded.candidate, allow_remote)
         try:
-            result = RunCorpus(baseline, candidate, loaded.rules, loaded.allow_mutating).execute(
-                cases
-            )
+            run_corpus = RunCorpus(baseline, candidate, loaded.rules, loaded.allow_mutating, state)
+            result = run_corpus.execute(cases)
         finally:
             baseline.close()
             candidate.close()
-    except (ConfigError, UnsafeTargetError, RunRefused) as e:
+    except (ConfigError, StateConfigError, UnsafeTargetError, RunRefused) as e:
         reporter.refused(str(e))
         raise typer.Exit(ExitCode.REFUSED) from e
 

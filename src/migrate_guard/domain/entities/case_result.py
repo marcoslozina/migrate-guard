@@ -7,6 +7,7 @@ from enum import StrEnum
 
 from migrate_guard.domain.entities.difference import Difference
 from migrate_guard.domain.value_objects.rules import Rule
+from migrate_guard.domain.value_objects.state_rules import StateRule
 
 
 class CaseStatus(StrEnum):
@@ -27,7 +28,8 @@ class CaseResult:
     name: str
     status: CaseStatus
     status_mismatch: StatusMismatch | None = None
-    differences: tuple[Difference, ...] = ()
+    differences: tuple[Difference, ...] = ()  # in the response body
+    state_differences: tuple[Difference, ...] = ()  # in the database, at /table/row/column
     error: str = ""
 
     @classmethod
@@ -45,7 +47,7 @@ class ExitCode:
 class RunResult:
     cases: tuple[CaseResult, ...]
     # Rules that matched nothing in any case of the run: probably stale (SPEC R2).
-    unused_rules: tuple[Rule, ...] = ()
+    unused_rules: tuple[Rule | StateRule, ...] = ()
 
     @property
     def exit_code(self) -> int:
