@@ -259,7 +259,7 @@ Testcontainers, ruff, mypy (strict), anthropic SDK (optional extra `[triage]`).
 ## 9. The demo: retail pricing
 
 A legacy pricing service (Flask + SQLite) and a rewrite (FastAPI + Postgres) produced with an AI
-assistant. The rewrite passes its own tests and still has five planted behavior changes:
+assistant. The rewrite looks fine at a glance and still has five planted behavior changes:
 
 1. **Rounding:** legacy rounds half-up on `Decimal`; the rewrite calls `round()` on a float. The
    float `2.675` is really `2.67499999…`, so it becomes `2.67` instead of `2.68`.

@@ -1,4 +1,4 @@
-"""The rewrite (FastAPI), "migrated with an AI assistant". Its own tests pass.
+"""The rewrite (FastAPI), "migrated with an AI assistant". It looks fine at a glance.
 
 It still changes four behaviors on purpose (see the demo README):
   1. round() on a float instead of half-up on Decimal: 2.675 becomes 2.67.
