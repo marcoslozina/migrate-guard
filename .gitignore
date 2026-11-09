@@ -20,3 +20,11 @@ reports/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+
+# Symlink to the shared skills library in dev-harness — points outside
+# this repo, so it must never be committed.
+.claude/skills
+
+# Symlink to the shared rules library in dev-harness — points outside
+# this repo, so it must never be committed.
+.claude/rules
