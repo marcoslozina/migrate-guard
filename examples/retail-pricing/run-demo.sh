@@ -4,6 +4,8 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
 cd "$root"
+mkdir -p "$here/.data"
+export LEGACY_DB="$here/.data/legacy.db" REWRITE_DB="$here/.data/rewrite.db"
 
 uv run --group demo flask --app "$here/legacy/app.py" run -p 5001 >/dev/null 2>&1 &
 legacy=$!

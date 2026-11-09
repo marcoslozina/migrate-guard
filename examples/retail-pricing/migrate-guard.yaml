@@ -3,9 +3,24 @@ version: 1
 baseline:
   target: http
   url: http://127.0.0.1:5001      # legacy (Flask)
+  state:
+    dsn: sqlite:///.data/legacy.db  # relative to this file; a real DSN goes in `dsn_env`
+    tables:
+      prices:                       # logical name, the same on both sides
+        table: Prices
+        key: [sku]
+        columns: { sku: SKU, price: PriceAmt, last_priced_at: LastPricedAt }
 candidate:
   target: http
   url: http://127.0.0.1:5002      # rewrite (FastAPI)
+  state:
+    dsn: sqlite:///.data/rewrite.db
+    tables:
+      prices: { key: [sku] }
+seed:
+  strategy: script                # both databases are reset before every case
+  baseline: seeds/legacy.sql
+  candidate: seeds/rewrite.sql
 corpus: cases/
 rules:
   response:
@@ -15,5 +30,5 @@ rules:
     - numeric: { path: /items/*/line_total, decimals: 2 }
     - numeric: { path: /line_total, decimals: 2 }
     - datetime: { path: /priced_at }            # -03:00 vs Z is the same instant
-# POST counts as mutating. Pricing a cart writes nothing yet; seeding arrives with state checks.
+# POST counts as mutating. Safe here: both databases are reseeded before every case.
 allow_mutating: true

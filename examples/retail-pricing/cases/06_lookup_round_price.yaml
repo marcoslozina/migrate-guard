@@ -1,0 +1,5 @@
+name: price lookup that only reads
+request:
+  method: GET
+  path: /prices/B2
+  query: { qty: "1" }
