@@ -77,6 +77,11 @@ class _Walker:
             self._not_applicable(at, baseline, candidate, f"conflicting rules: {names}")
             return
         if value_rules:
+            # null on both sides: there is no value to tolerate or to validate, so it matches.
+            # Only null: equal values of the wrong type ("abc" under `numeric`) still report
+            # that the rule's assumption is broken. A null on one side was a type change above.
+            if baseline is None and candidate is None:
+                return
             self._apply(value_rules[0], baseline, candidate, at)
             return
 

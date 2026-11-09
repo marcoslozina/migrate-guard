@@ -259,3 +259,36 @@ def test_rules_when_numeric_path_never_matches_then_reported_unused() -> None:
     stale = NumericRule(path="/old_price", decimals=2)
 
     assert diff_responses({"a": 1}, {"a": 1}, (stale,)).unused_rules == (stale,)
+
+
+# --- null under a value rule -----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        DatetimeRule(path="/ends_at"),
+        NumericRule(path="/ends_at", decimals=2),
+        UnorderedRule(path="/ends_at", key="sku"),
+    ],
+)
+def test_value_rule_when_both_sides_are_null_then_matches(rule: object) -> None:
+    # A promotion with no end date in both services: nothing to tolerate, nothing to validate.
+    result = diff_responses({"ends_at": None}, {"ends_at": None}, (rule,))  # type: ignore[arg-type]
+
+    assert result.is_match
+    assert result.unused_rules == ()  # the path exists, so the rule is not stale
+
+
+def test_datetime_when_only_candidate_is_null_then_reports_type_changed() -> None:
+    assert kinds(
+        {"ends_at": "2026-11-30T23:59:00-03:00"},
+        {"ends_at": None},
+        DatetimeRule(path="/ends_at"),
+    ) == [DiffKind.TYPE_CHANGED]
+
+
+def test_value_rule_when_both_null_but_rules_conflict_then_still_reports_the_conflict() -> None:
+    rules = (DatetimeRule(path="/ends_at"), NumericRule(path="/ends_at", decimals=2))
+
+    assert kinds({"ends_at": None}, {"ends_at": None}, *rules) == [DiffKind.RULE_NOT_APPLICABLE]
