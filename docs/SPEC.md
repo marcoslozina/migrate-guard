@@ -65,16 +65,19 @@ baseline:
   state:
     dsn_env: LEGACY_DB_DSN          # DSN is read from the environment, never from this file
     tables:
-      prices: { key: [sku] }
-      promotions: { key: [promo_id] }
+      prices:                       # logical name, shared by both sides
+        table: Prices               # physical name on this side (default: the logical name)
+        key: [sku]                  # logical column names; required
+        columns: { sku: SKU, price: PriceAmt }   # logical -> physical
+      promotions: { table: tblPromo, key: [promo_id] }
 candidate:
   target: asgi
   app: new_pricing.main:app
   state:
     dsn_env: NEW_DB_DSN
     tables:
-      prices: { key: [sku], map_from: Prices }          # legacy table name
-      promotions: { key: [promo_id], map_from: tblPromo }
+      prices: { key: [sku] }        # same names as the logical ones
+      promotions: { key: [promo_id] }
 corpus: cases/
 seed:
   strategy: script                   # script | transaction
@@ -89,7 +92,6 @@ rules:
     - datetime: { path: /promo/ends_at, normalize: utc }
   state:
     - ignore_column: { table: prices, column: updated_at }
-    - map_column: { table: prices, from: PriceAmt, to: price }
     - numeric: { table: prices, column: price, decimals: 2 }
 allow_mutating: false
 ```
@@ -143,10 +145,16 @@ Each requirement lists its acceptance scenarios (Given / When / Then), including
 - **Given** a case that updates one price, **when** both targets run it, **then** the state probe
   compares the watched tables row by row (by key) and reports `added`, `removed` or `changed`
   rows, with the column and both values.
-- **Given** a legacy table `Prices.PriceAmt` and a new table `prices.price` with a `map_column`
-  rule, **then** they are compared as the same column.
-- **Given** type differences that are equivalent (`DECIMAL(10,2)` vs `NUMERIC`, `DATETIME` vs
-  `TIMESTAMPTZ` in UTC), **then** values are normalized before comparing.
+- **Given** a legacy table `Prices.PriceAmt` and a new table `prices.price`, each side declaring
+  its own physical names under one logical name, **then** they are compared as the same column.
+  Each side maps its own names, so neither schema is "the reference" one.
+- **Given** type differences that are equivalent (`DECIMAL(10,2)` vs `NUMERIC` vs SQLite `REAL`,
+  `DATETIME` vs `TIMESTAMPTZ` in UTC), **then** values are normalized before comparing. A naive
+  `DATETIME` is kept as written: a local time saved without offset still shows as a difference.
+- **Given** a key that is not unique, or a key column that is null, **then** the probe reports it
+  and the case is `error`: rows are never paired by a guess.
+- **Given** a case whose responses are identical but whose writes differ, **then** the case is a
+  difference, located at `/<table>/<key>/<column>` (for example `/prices/sku=B2/last_priced_at`).
 - **Given** a watched table with no key defined, **then** the config is rejected with exit code
   **2** (no row-order guessing).
 - **Given** a table with more than `max_rows` (default 10 000) rows, **then** the probe stops and
@@ -157,7 +165,10 @@ Each requirement lists its acceptance scenarios (Given / When / Then), including
 - **Given** `seed.strategy: script`, **when** each case starts, **then** both databases are reset
   with their seed script **before** the case runs.
 - **Given** `seed.strategy: transaction` and an in-process target, **then** each case runs inside
-  a transaction that is rolled back afterwards.
+  a transaction that is rolled back afterwards. (Not implemented yet: the config is rejected.)
+- **Given** `state` on the targets, **then** a `seed` section is required (exit code **2**
+  otherwise). SQLite and Postgres are supported; a seed script must not contain its own
+  `BEGIN`/`COMMIT`.
 - **Given** the seed fails on one target, **then** that case is reported as `error: seed failed`
   and **no request is sent** to either target.
 
@@ -198,7 +209,8 @@ Each requirement lists its acceptance scenarios (Given / When / Then), including
   probe candidate → compare. A failure at any step marks the case `error` and skips the remaining
   steps for that case.
 - **Probes are read-only.** The state probe opens its own connection and only runs `SELECT`
-  statements. It never writes.
+  statements built from quoted identifiers. The engine enforces it too (`PRAGMA query_only` on
+  SQLite, `SET TRANSACTION READ ONLY` on Postgres), and the transaction is always rolled back.
 - **Partial results are not reported as matches.** If the response compared but the state probe
   failed, the case is `error`, not `match`.
 - **Seed scripts run inside a transaction** where the engine supports it. If the script fails, it
@@ -211,7 +223,8 @@ Each requirement lists its acceptance scenarios (Given / When / Then), including
 - **Mutating requests are opt-in.** `POST`, `PUT`, `PATCH` and `DELETE` cases require
   `allow_mutating: true` in the config.
 - **No secrets in config files.** DSNs and API keys come from environment variables (`dsn_env`).
-  The config loader rejects inline DSNs that contain a password.
+  The config loader rejects inline DSNs that contain a password, never echoes a DSN in an error,
+  and database errors are reported with the password removed.
 - **Redaction in reports.** `Authorization`, `Cookie`, `Set-Cookie` and `X-Api-Key` headers, plus
   any field matching configurable patterns (`password`, `token`, `secret`, card numbers), are
   replaced by `[REDACTED]` in every report and log.

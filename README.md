@@ -4,7 +4,7 @@
 
 Behavioral parity testing for service migrations. Not a schema migration linter.
 
-**Status:** pre-alpha, built in public. Nothing to install yet.
+**Status:** pre-alpha, built in public. Not on PyPI yet: run it from source (see the demo).
 
 ## The problem
 
@@ -40,11 +40,35 @@ Every difference is reported with its exact location, so you can decide: expecte
 migrate-guard compares the response **and** the resulting database state, with tolerance rules
 built for migrations.
 
+## See it work
+
+The demo replays 6 requests against a legacy Flask pricing service and its FastAPI rewrite, with
+five planted bugs. It catches all five, including one that only shows up in the database:
+
+```text
+✗ price lookup that only reads
+    state /prices/sku=B2/last_priced_at  null → "2026-11-09T15:29:02.885023+00:00"  type_changed
+```
+
+Same response on both sides; the rewrite also writes a row on every read. Run it with
+`uv sync --group demo && examples/retail-pricing/run-demo.sh`. Details in
+[`examples/retail-pricing`](examples/retail-pricing/README.md).
+
 ## What works today
+
+- `migrate-guard run --config migrate-guard.yaml`, with exit codes `0` (all match), `1`
+  (differences or case errors) and `2` (refused: invalid config, unreachable target, safety).
+- Response comparison: status code and JSON body, with tolerance rules.
+- Database state comparison (SQLite and Postgres): both databases are reseeded before every case,
+  each watched table is read row by row after the request, and the rows are compared by key. Each
+  side can use its own table and column names.
+
+### The diff engine
+
 
 The core diff engine: compare two JSON bodies and get every difference with its exact location
 (a [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901)), after applying the tolerance rules
-you expect. There is no CLI yet.
+you expect.
 
 ```python
 import json
@@ -109,9 +133,10 @@ differently. The kinds of difference are `value_changed`, `type_changed`, `missi
 ## Roadmap
 
 - [x] **M0:** project skeleton, response diff with `ignore` rules.
-- [ ] **M1:** ~~numeric, unordered and datetime rules~~ (done); HTTP target; `migrate-guard run`
-      CLI; the retail-pricing demo.
-- [ ] **M2:** database state diff (SQLAlchemy: Postgres, SQL Server, SQLite), seeding and isolation.
+- [x] **M1:** numeric, unordered and datetime rules; HTTP target; `migrate-guard run` CLI; the
+      retail-pricing demo.
+- [x] **M2:** database state diff (SQLAlchemy: Postgres and SQLite), seeding and isolation.
+      SQL Server comes later.
 - [ ] **M3:** pytest plugin, JSON and JUnit reports, first PyPI release.
 - [ ] **M4:** opt-in AI triage of differences (expected vs likely bug).
 
@@ -121,7 +146,10 @@ The full specification is in [`docs/SPEC.md`](docs/SPEC.md).
 
 - Loopback targets only, unless you pass `--allow-remote`.
 - Mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) are opt-in.
-- Secrets come from environment variables, never from config files.
+- Secrets come from environment variables, never from config files. Database errors are reported
+  with the password removed.
+- The state probe is read-only, enforced by the engine itself, and baseline and candidate can
+  never point to the same database.
 - Sensitive headers and fields are redacted in every report.
 - AI triage never runs unless you ask for it, and never turns a difference into a match.
 
@@ -129,7 +157,7 @@ The full specification is in [`docs/SPEC.md`](docs/SPEC.md).
 
 ```bash
 uv sync
-uv run pytest
+uv run pytest              # the Postgres integration tests need Docker; they skip without it
 uv run ruff check .
 uv run mypy
 ```
