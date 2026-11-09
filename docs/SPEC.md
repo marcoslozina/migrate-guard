@@ -131,6 +131,10 @@ Each requirement lists its acceptance scenarios (Given / When / Then), including
 - **Given** arrays with the same items in a different order and an `unordered` rule keyed by `sku`,
   **then** it is a match. **Given** a duplicated key in one array, **then** it is a difference
   (`duplicate key A1 in candidate`), never a silent match.
+- **Given** `null` on both sides under a value rule (`numeric`, `datetime`, `unordered`), **then**
+  it is a match: there is no value to tolerate. **Given** equal values of the wrong type (`"abc"`
+  vs `"abc"` under `numeric`), **then** it is still `rule not applicable`, so a misconfigured rule
+  never passes silently. `null` on one side only is a type change.
 - **Given** a rule whose path matches nothing in either response, **then** the report shows a
   warning `rule never applied`, so stale rules are visible.
 
@@ -257,8 +261,8 @@ Testcontainers, ruff, mypy (strict), anthropic SDK (optional extra `[triage]`).
 A legacy pricing service (Flask + SQLite) and a rewrite (FastAPI + Postgres) produced with an AI
 assistant. The rewrite passes its own tests and still has five planted behavior changes:
 
-1. **Rounding:** legacy rounds half-up; the rewrite uses Python's `round()` (half-even). `2.675`
-   becomes `2.67` instead of `2.68`.
+1. **Rounding:** legacy rounds half-up on `Decimal`; the rewrite calls `round()` on a float. The
+   float `2.675` is really `2.67499999…`, so it becomes `2.67` instead of `2.68`.
 2. **Stacked discounts:** legacy applies the percentage first, then the fixed amount; the rewrite
    does it the other way.
 3. **Null end date:** legacy treats a promotion with no `ends_at` as active; the rewrite treats it

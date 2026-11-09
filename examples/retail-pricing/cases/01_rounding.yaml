@@ -1,0 +1,5 @@
+name: price of one unit that ends in 5
+request:
+  method: GET
+  path: /prices/A1
+  query: { qty: "1" }

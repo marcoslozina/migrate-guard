@@ -1,0 +1,9 @@
+name: last night of a promotion, Buenos Aires time
+request:
+  method: POST
+  path: /cart/price
+  json:
+    items: [{ sku: C3, qty: 1 }]
+    promo_codes: [SUMMER10]
+    # 22:00 on Nov 30 in Buenos Aires: SUMMER10 ends at 23:59 local, so it still applies.
+    at: "2026-12-01T01:00:00Z"

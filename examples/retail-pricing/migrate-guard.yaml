@@ -1,0 +1,19 @@
+# migrate-guard demo: the legacy pricing service vs its AI-assisted rewrite.
+version: 1
+baseline:
+  target: http
+  url: http://127.0.0.1:5001      # legacy (Flask)
+candidate:
+  target: http
+  url: http://127.0.0.1:5002      # rewrite (FastAPI)
+corpus: cases/
+rules:
+  response:
+    - ignore: /request_id          # random on every call
+    - ignore: /generated_at        # the clock, not behavior
+    - unordered: { path: /items, key: sku }     # the rewrite sorts the cart lines
+    - numeric: { path: /items/*/line_total, decimals: 2 }
+    - numeric: { path: /line_total, decimals: 2 }
+    - datetime: { path: /priced_at }            # -03:00 vs Z is the same instant
+# POST counts as mutating. Pricing a cart writes nothing yet; seeding arrives with state checks.
+allow_mutating: true

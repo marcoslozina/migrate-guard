@@ -1,0 +1,8 @@
+name: promotion with no end date
+request:
+  method: POST
+  path: /cart/price
+  json:
+    items: [{ sku: C3, qty: 1 }]
+    promo_codes: [LOYAL2]
+    at: "2026-11-15T12:00:00Z"

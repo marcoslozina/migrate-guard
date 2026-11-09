@@ -1,0 +1,8 @@
+name: stacked percentage and fixed promotions
+request:
+  method: POST
+  path: /cart/price
+  json:
+    items: [{ sku: C3, qty: 4 }]
+    promo_codes: [SUMMER10, VIP5]
+    at: "2026-11-15T12:00:00Z"
