@@ -62,6 +62,19 @@ Same response on both sides; the rewrite also writes a row on every read. Run it
 - Database state comparison (SQLite and Postgres): both databases are reseeded before every case,
   each watched table is read row by row after the request, and the rows are compared by key. Each
   side can use its own table and column names.
+- Reports for tools: `--report json` (a versioned schema, numbers written exactly) and
+  `--report junit` (one testcase per case). Alone they go to stdout; with `-o FILE` the terminal
+  summary stays on screen and the file is written whole or not at all.
+- A pytest plugin: `pytest --migrate-guard=migrate-guard.yaml` turns each case into a test named
+  `migrate_guard[<case name>]`, so `-k`, `--junitxml` and your usual CI setup just work.
+
+### In CI
+
+```bash
+migrate-guard run --config migrate-guard.yaml --report junit -o reports/migrate-guard.xml
+# or, inside an existing pytest run:
+pytest --migrate-guard=migrate-guard.yaml
+```
 
 ### The diff engine
 
@@ -137,7 +150,8 @@ differently. The kinds of difference are `value_changed`, `type_changed`, `missi
       retail-pricing demo.
 - [x] **M2:** database state diff (SQLAlchemy: Postgres and SQLite), seeding and isolation.
       SQL Server comes later.
-- [ ] **M3:** pytest plugin, JSON and JUnit reports, first PyPI release.
+- [ ] **M3:** pytest plugin, JSON and JUnit reports and CI are done; the first PyPI release
+      (Trusted Publishing) is next.
 - [ ] **M4:** opt-in AI triage of differences (expected vs likely bug).
 
 The full specification is in [`docs/SPEC.md`](docs/SPEC.md).
@@ -150,7 +164,8 @@ The full specification is in [`docs/SPEC.md`](docs/SPEC.md).
   with the password removed.
 - The state probe is read-only, enforced by the engine itself, and baseline and candidate can
   never point to the same database.
-- Sensitive headers and fields are redacted in every report.
+- Sensitive headers and fields are redacted in every report: terminal, JSON, JUnit and pytest.
+- Report files are created readable only by you, since they can hold test data.
 - AI triage never runs unless you ask for it, and never turns a difference into a match.
 
 ## Development
@@ -161,6 +176,9 @@ uv run pytest              # the Postgres integration tests need Docker; they sk
 uv run ruff check .
 uv run mypy
 ```
+
+CI runs ruff, mypy, the tests on Python 3.12 and 3.13 (Postgres included), the demo, and
+`pip-audit` against the lockfile. The GitHub Actions are pinned by commit SHA.
 
 ## License
 

@@ -174,7 +174,12 @@ Each requirement lists its acceptance scenarios (Given / When / Then), including
 
 ### R5 — CLI and exit codes
 
-- `migrate-guard run [--config] [--case NAME] [--report json|junit|terminal]`
+- `migrate-guard run [--config] [--case NAME] [--report json|junit|terminal] [--output FILE]`
+- `--report json` or `junit` without `--output` writes only the report, to stdout. With
+  `--output`, the terminal summary stays on stdout and the report goes to the file, written to a
+  temporary file and renamed, so CI never reads half a report. `--output` with the terminal
+  format is refused.
+- Refusals go to stderr, so stdout stays a valid report even when the run is refused.
 - `migrate-guard init` writes a commented example config.
 - Exit codes: **0** all match · **1** at least one difference or case error · **2** invalid
   config, unreachable target, or safety refusal.
@@ -183,12 +188,28 @@ Each requirement lists its acceptance scenarios (Given / When / Then), including
 
 - **Given** `pytest --migrate-guard=migrate-guard.yaml`, **then** each case becomes one test named
   `migrate_guard[<case name>]`, and a difference fails that test with the readable diff.
+- **Given** a case that could not be compared, or a refused run (unreachable target, mutating
+  case without `allow_mutating`), **then** that test fails. It never passes.
+- **Given** an invalid config, **then** pytest stops with a usage error before running anything.
+- **Given** `-k`, **then** it selects cases like any other test. Rules unused in every compared
+  case are listed in the terminal summary.
+- Remote targets need `--migrate-guard-allow-remote`. Without `--migrate-guard` the plugin does
+  nothing.
 
 ### R7 — Reports
 
 - Terminal: summary plus the first N differences per case.
-- JSON: full result, stable schema (`report_version: 1`).
-- JUnit XML: one testcase per case, for CI.
+- JSON: full result, stable schema (`report_version: 1`): a `summary` with the counts and the exit
+  code, one entry per case (`name`, `status`, `error`, `status_mismatch`, `differences`,
+  `state_differences`) and `unused_rules`. Each difference has `kind`, `path`, `baseline`,
+  `candidate` and an optional `detail`. A side that does not exist has no key, which is not the
+  same as `null`. Numbers are written exactly (`2.675`, never a float). New fields can appear
+  without a version change; renaming or removing one changes `report_version`.
+- JUnit XML: one testcase per case. A difference is a `<failure>`, a case that could not be
+  compared is an `<error>`. Characters XML can't hold are replaced, so a response with a control
+  character can't break the file.
+- Every report is redacted the same way (§7), and report files are created readable only by
+  their owner.
 
 ### R8 — AI triage (phase 2, opt-in)
 
