@@ -6,14 +6,12 @@ from rich.console import Console
 from rich.text import Text
 
 from migrate_guard.domain.entities.case_result import CaseResult, CaseStatus, RunResult
-from migrate_guard.domain.entities.difference import MISSING, Difference, Side
-from migrate_guard.domain.services.redaction import RedactionPolicy, redact_difference
-from migrate_guard.domain.value_objects.json_value import to_json_text
-from migrate_guard.domain.value_objects.rules import Rule
-from migrate_guard.domain.value_objects.state_rules import (
-    IgnoreColumnRule,
-    StateNumericRule,
-    StateRule,
+from migrate_guard.domain.entities.difference import Difference
+from migrate_guard.domain.services.redaction import RedactionPolicy, redact_text
+from migrate_guard.infrastructure.adapters.reporters.plain_text import (
+    describe_rule,
+    labelled_differences,
+    show_side,
 )
 
 DEFAULT_MAX_DIFFERENCES = 10
@@ -40,7 +38,9 @@ class TerminalReporter:
         for case in run.cases:
             self._case(case)
         for rule in run.unused_rules:
-            self._console.print(Text(f"⚠ rule never applied: {_describe(rule)}", style="yellow"))
+            self._console.print(
+                Text(f"⚠ rule never applied: {describe_rule(rule)}", style="yellow")
+            )
         self._console.print()
         self._console.print(self._summary(run))
 
@@ -51,35 +51,19 @@ class TerminalReporter:
         mark, color = _MARK[case.status]
         self._console.print(Text.assemble((f"{mark} ", color), (case.name, "bold")))
         if case.status is CaseStatus.ERROR:
-            self._console.print(Text(f"    error: {case.error}", style="yellow"))
+            self._console.print(Text(f"    error: {redact_text(case.error)}", style="yellow"))
             return
         if case.status_mismatch:
             m = case.status_mismatch
             self._console.print(Text(f"    status  {m.baseline} → {m.candidate}", style="red"))
-        shown = 0
-        for label, diffs in (("", case.differences), ("state ", case.state_differences)):
-            for diff in diffs:
-                if shown == self._max:
-                    break
-                self._console.print(self._line(label, diff))
-                shown += 1
-        hidden = len(case.differences) + len(case.state_differences) - shown
-        if hidden > 0:
-            self._console.print(Text(f"    … and {hidden} more", style="dim"))
+        diffs = labelled_differences(case, self._policy)
+        for label, diff in diffs[: self._max]:
+            self._console.print(_line(label, diff))
+        if len(diffs) > self._max:
+            self._console.print(Text(f"    … and {len(diffs) - self._max} more", style="dim"))
 
-    def _line(self, label: str, diff: Difference) -> Text:
-        d = redact_difference(diff, self._policy)
-        line = Text("    ")
-        if label:
-            line.append(label, style="magenta")
-        line.append(str(d.location) or "/", style="cyan")
-        line.append(f"  {_show(d.baseline)} → {_show(d.candidate)}")
-        line.append(f"  {d.kind}", style="dim")
-        if d.detail:
-            line.append(f"  ({d.detail})", style="dim")
-        return line
-
-    def _summary(self, run: RunResult) -> Text:
+    @staticmethod
+    def _summary(run: RunResult) -> Text:
         total = len(run.cases)
         return Text.assemble(
             (f"{total} case{'s' if total != 1 else ''}: ", "bold"),
@@ -91,20 +75,13 @@ class TerminalReporter:
         )
 
 
-def _show(side: Side) -> str:
-    if side is MISSING:
-        return "(missing)"
-    return to_json_text(side)
-
-
-def _describe(rule: Rule | StateRule) -> str:
-    name = type(rule).__name__.removesuffix("Rule").lower()
-    if isinstance(rule, IgnoreColumnRule):
-        return f"state ignore_column {rule.table}.{rule.column}"
-    if isinstance(rule, StateNumericRule):
-        extra = rule.model_dump(exclude={"table", "column"}, mode="json")
-        args = " ".join(f"{k}={v}" for k, v in extra.items())
-        return f"state numeric {rule.table}.{rule.column} ({args})"
-    fields = rule.model_dump(exclude={"path"}, mode="json")
-    extra_text = " ".join(f"{k}={v}" for k, v in fields.items())
-    return f"{name} {rule.path}" + (f" ({extra_text})" if extra_text else "")
+def _line(label: str, diff: Difference) -> Text:
+    line = Text("    ")
+    if label:
+        line.append(label, style="magenta")
+    line.append(str(diff.location) or "/", style="cyan")
+    line.append(f"  {show_side(diff.baseline)} → {show_side(diff.candidate)}")
+    line.append(f"  {diff.kind}", style="dim")
+    if diff.detail:
+        line.append(f"  ({diff.detail})", style="dim")
+    return line
