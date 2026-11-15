@@ -26,6 +26,12 @@ dependencies = [
     "typer>=0.28.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/marcoslozina/migrate-guard"
+Repository = "https://github.com/marcoslozina/migrate-guard"
+Issues = "https://github.com/marcoslozina/migrate-guard/issues"
+Changelog = "https://github.com/marcoslozina/migrate-guard/releases"
+
 [project.scripts]
 migrate-guard = "migrate_guard.cli.app:main"
 

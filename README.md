@@ -4,7 +4,12 @@
 
 Behavioral parity testing for service migrations. Not a schema migration linter.
 
-**Status:** pre-alpha, built in public. Not on PyPI yet: run it from source (see the demo).
+**Status:** pre-alpha, built in public. Python 3.12+.
+
+```bash
+pip install migrate-guard                # or: uv add --dev migrate-guard
+pip install "migrate-guard[postgres]"    # to compare Postgres databases
+```
 
 ## The problem
 
@@ -52,7 +57,7 @@ five planted bugs. It catches all five, including one that only shows up in the 
 
 Same response on both sides; the rewrite also writes a row on every read. Run it with
 `uv sync --group demo && examples/retail-pricing/run-demo.sh`. Details in
-[`examples/retail-pricing`](examples/retail-pricing/README.md).
+[`examples/retail-pricing`](https://github.com/marcoslozina/migrate-guard/blob/main/examples/retail-pricing/README.md).
 
 ## What works today
 
@@ -150,11 +155,11 @@ differently. The kinds of difference are `value_changed`, `type_changed`, `missi
       retail-pricing demo.
 - [x] **M2:** database state diff (SQLAlchemy: Postgres and SQLite), seeding and isolation.
       SQL Server comes later.
-- [ ] **M3:** pytest plugin, JSON and JUnit reports and CI are done; the first PyPI release
-      (Trusted Publishing) is next.
+- [x] **M3:** pytest plugin, JSON and JUnit reports, CI, and the first PyPI release (Trusted
+      Publishing).
 - [ ] **M4:** opt-in AI triage of differences (expected vs likely bug).
 
-The full specification is in [`docs/SPEC.md`](docs/SPEC.md).
+The full specification is in [`docs/SPEC.md`](https://github.com/marcoslozina/migrate-guard/blob/main/docs/SPEC.md).
 
 ## Safety by default
 
@@ -182,4 +187,4 @@ CI runs ruff, mypy, the tests on Python 3.12 and 3.13 (Postgres included), the d
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/marcoslozina/migrate-guard/blob/main/LICENSE).
